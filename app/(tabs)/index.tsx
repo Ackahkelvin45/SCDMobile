@@ -1,31 +1,33 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Platform,
   Dimensions,
 } from 'react-native';
+import { router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useFocusEffect } from '@react-navigation/native';
 import { PRIMARY, PRIMARY_DARK, Fonts } from '../../constants/theme';
+import { useLatestVisit, useVisitTrends } from '@/features/visits/hooks';
+import { useLatestPrediction } from '@/features/ml/hooks/use-latest-prediction';
+import { useTodayMedication } from '@/features/medications/hooks';
+import { Skeleton } from '@/components/Skeleton';
+import type { TrendDay } from '@/features/visits/api';
 
 const { width } = Dimensions.get('window');
 const CHART_H = 90;
 
-const PAIN_DATA = [
-  { day: 'Mon', value: 3 },
-  { day: 'Tue', value: 2 },
-  { day: 'Wed', value: 5 },
-  { day: 'Thu', value: 8 },
-  { day: 'Fri', value: 3 },
-  { day: 'Sat', value: 1 },
-  { day: 'Sun', value: 1 },
-];
+// ─── types ────────────────────────────────────────────────────────────────────
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function barColor(value: number) {
   if (value >= 7) return '#ef4444';
@@ -33,17 +35,21 @@ function barColor(value: number) {
   return '#86efac';
 }
 
-const MEDICATIONS = [
-  { name: 'Hydroxyurea', dose: '500 mg', time: '08:00 AM', taken: true,  icon: 'medkit' as const },
-  { name: 'Folic Acid',  dose: '5 mg',   time: '08:00 AM', taken: true,  icon: 'leaf'   as const },
-  { name: 'Penicillin',  dose: '250 mg', time: '08:00 PM', taken: false, icon: 'flask'  as const },
-];
+function buildPainChartData(days: TrendDay[]): { day: string; value: number }[] {
+  return days.map((d) => ({ day: d.day_label, value: d.pain_episodes ?? 0 }));
+}
+
+function pillStyle(predicted_class?: 'responder' | 'non_responder') {
+  if (predicted_class === 'non_responder') return { bg: '#FEE2E2', dot: '#DC2626', text: 'ELEVATED', textColor: '#DC2626' };
+  if (predicted_class === 'responder')     return { bg: 'rgba(255,255,255,0.92)', dot: PRIMARY, text: 'STABLE', textColor: PRIMARY_DARK };
+  return                                          { bg: '#FEF9C3', dot: '#CA8A04', text: 'MONITOR', textColor: '#CA8A04' };
+}
 
 const QUICK_ACTIONS = [
-  { icon: 'add-circle-outline' as const, label: 'Log Symptoms',  variant: 'light' as const },
-  { icon: 'flask-outline'      as const, label: 'Add Lab Data',  variant: 'light' as const },
-  { icon: 'medkit-outline'     as const, label: 'Medications',   variant: 'gray'  as const },
-  { icon: 'analytics-outline'  as const, label: 'Predict Risk',  variant: 'dark'  as const },
+  { icon: 'add-circle-outline' as const, label: 'Log Symptoms',        variant: 'light' as const, href: '/(log)/symptoms'  as const },
+  { icon: 'flask-outline'      as const, label: 'Add Lab Data',        variant: 'light' as const, href: '/(tabs)/log'      as const },
+  { icon: 'medkit-outline'     as const, label: 'Medications',         variant: 'gray'  as const, href: '/(log)/medication' as const },
+  { icon: 'analytics-outline'  as const, label: 'Predict HU Response', variant: 'dark'  as const, href: '/(tabs)/predict'  as const },
 ] as const;
 
 function SectionHeader({ title, onSeeAll }: { title: string; onSeeAll?: () => void }) {
@@ -59,33 +65,76 @@ function SectionHeader({ title, onSeeAll }: { title: string; onSeeAll?: () => vo
   );
 }
 
+// ─── component ────────────────────────────────────────────────────────────────
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const CARD_W = (width - 40 - 12) / 2;
+  const [refreshing, setRefreshing] = useState(false);
+
+  const { data: latestVisit, isLoading: visitLoading, refetch: refetchVisit } = useLatestVisit();
+  const { data: trendsData, refetch: refetchTrends }                          = useVisitTrends(7);
+  const { data: todayMed, refetch: refetchMed, isLoading: medLoading, isError: medError } = useTodayMedication();
+  const { data: prediction, isLoading: predLoading, refetch: refetchPrediction } = useLatestPrediction();
+
+  const heroLoading = visitLoading || predLoading;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refetchMed();
+    }, [refetchMed])
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.allSettled([refetchVisit(), refetchTrends(), refetchMed(), refetchPrediction()]);
+    setRefreshing(false);
+  }, [refetchVisit, refetchTrends, refetchMed, refetchPrediction]);
+
+  const painData = trendsData ? buildPainChartData(trendsData.days) : [];
+  const pill     = pillStyle(prediction?.predicted_class);
+
+  const riskHeadline =
+    prediction?.predicted_class === 'responder'     ? 'High'  :
+    prediction?.predicted_class === 'non_responder' ? 'Low'   : '--';
+  const riskDesc =
+    prediction?.predicted_class === 'responder'
+      ? 'High likelihood of HU response at next follow-up. Keep up with your current dose.'
+      : prediction?.predicted_class === 'non_responder'
+      ? 'Low likelihood of HU response at next follow-up. Speak with your clinician.'
+      : 'Log a visit to generate your first prediction.';
+
+  const miniStats = [
+    { label: 'Hb',   value: latestVisit?.hgb            ?? '--', unit: 'g/dL' },
+    { label: 'WBC',  value: latestVisit?.wbc             ?? '--', unit: 'k/uL' },
+    { label: 'Pain', value: latestVisit?.pain_episodes   != null ? String(latestVisit.pain_episodes) : '--', unit: '/10' },
+  ];
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <StatusBar style="dark" />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={PRIMARY}
+            colors={[PRIMARY]}
+          />
+        }
       >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <View style={styles.avatar}>
-            <Ionicons name="person" size={18} color={PRIMARY} />
-          </View>
-          <View style={styles.headerText}>
-            <Text style={styles.headerSmall}>Good morning,</Text>
-            <Text style={styles.headerName}>Kwame 👋</Text>
-          </View>
-          <TouchableOpacity style={styles.bellBtn} activeOpacity={0.8}>
-            <Ionicons name="notifications-outline" size={20} color="#0f172a" />
-            <View style={styles.notifDot} />
-          </TouchableOpacity>
-        </View>
-
         {/* ── Risk Level Card ── */}
+        {heroLoading ? (
+          <View style={[styles.riskCard, { backgroundColor: '#e2e8f0', gap: 16 }]}>
+            <Skeleton height={12} width="50%" radius={6} />
+            <Skeleton height={36} width="40%" radius={8} />
+            <Skeleton height={14} width="90%" radius={6} />
+            <Skeleton height={14} width="70%" radius={6} />
+            <Skeleton height={56} radius={14} style={{ marginTop: 8 }} />
+          </View>
+        ) : (
         <LinearGradient
           colors={[PRIMARY, PRIMARY_DARK, '#0b5226']}
           start={{ x: 0.1, y: 0 }}
@@ -93,26 +142,22 @@ export default function HomeScreen() {
           style={styles.riskCard}
         >
           <View style={styles.riskTopRow}>
-            <Text style={styles.riskCardLabel}>Current Risk Level</Text>
-            <View style={styles.stablePill}>
-              <View style={styles.stableDot} />
-              <Text style={styles.stableText}>STABLE</Text>
+            <Text style={styles.riskCardLabel}>HU Response Outlook</Text>
+            <View style={[styles.stablePill, { backgroundColor: pill.bg }]}>
+              <View style={[styles.stableDot, { backgroundColor: pill.dot }]} />
+              <Text style={[styles.stableText, { color: pill.textColor }]}>{pill.text}</Text>
             </View>
           </View>
           <Text style={styles.riskMain}>
-            Low<Text style={styles.riskSub}> probability of crisis</Text>
+            {riskHeadline}
+            {riskHeadline !== '--' && (
+              <Text style={styles.riskSub}> likelihood of HU response</Text>
+            )}
           </Text>
-          <Text style={styles.riskDesc}>
-            Your vitals have been consistent over the last 48 hours. Keep up with hydration.
-          </Text>
+          <Text style={styles.riskDesc}>{riskDesc}</Text>
 
-          {/* Mini stats inside card */}
           <View style={styles.riskStatsRow}>
-            {[
-              { label: 'Hb', value: '11.2', unit: 'g/dL' },
-              { label: 'WBC', value: '8.4', unit: 'k/uL' },
-              { label: 'Pain', value: '2', unit: '/10' },
-            ].map((s, i) => (
+            {miniStats.map((s, i) => (
               <View key={s.label} style={[styles.riskStat, i < 2 && styles.riskStatDivider]}>
                 <Text style={styles.riskStatValue}>{s.value}<Text style={styles.riskStatUnit}> {s.unit}</Text></Text>
                 <Text style={styles.riskStatLabel}>{s.label}</Text>
@@ -120,22 +165,26 @@ export default function HomeScreen() {
             ))}
           </View>
         </LinearGradient>
+        )}
 
         {/* ── Pain Trend ── */}
-        <SectionHeader title="Pain Trend" onSeeAll={() => {}} />
+        <SectionHeader title="Pain Trend" onSeeAll={() => router.push('/(tabs)/history')} />
         <View style={styles.chartCard}>
           <Text style={styles.chartSubtitle}>Last 7 days</Text>
           <View style={styles.chartArea}>
             <View style={[styles.guideLine, { bottom: CHART_H * 0.65 }]} />
             <View style={[styles.guideLine, { bottom: CHART_H * 0.35 }]} />
             <View style={styles.barsRow}>
-              {PAIN_DATA.map((item) => (
-                <View key={item.day} style={styles.barGroup}>
-                  <Text style={styles.barValue}>{item.value}</Text>
+              {painData.map((item, i) => (
+                <View key={i} style={styles.barGroup}>
+                  <Text style={styles.barValue}>{item.value > 0 ? item.value : ''}</Text>
                   <View
                     style={[
                       styles.bar,
-                      { height: Math.max(6, (item.value / 10) * CHART_H), backgroundColor: barColor(item.value) },
+                      {
+                        height: item.value > 0 ? Math.max(6, (item.value / 10) * CHART_H) : 6,
+                        backgroundColor: item.value > 0 ? barColor(item.value) : '#e2e8f0',
+                      },
                     ]}
                   />
                   <Text style={styles.barDay}>{item.day}</Text>
@@ -158,30 +207,70 @@ export default function HomeScreen() {
         </View>
 
         {/* ── Today's Medications ── */}
-        <SectionHeader title="Today's Medications" onSeeAll={() => {}} />
-        <View style={styles.medCard}>
-          {MEDICATIONS.map((med, i) => (
-            <View key={med.name} style={[styles.medRow, i < MEDICATIONS.length - 1 && styles.medDivider]}>
-              <View style={[styles.medIconBox, med.taken && styles.medIconBoxTaken]}>
-                <Ionicons name={med.icon} size={18} color={med.taken ? PRIMARY_DARK : '#94a3b8'} />
-              </View>
-              <View style={styles.medInfo}>
-                <Text style={styles.medName}>{med.name}</Text>
-                <Text style={styles.medDose}>{med.dose} · {med.time}</Text>
-              </View>
-              <View style={[styles.medStatus, med.taken && styles.medStatusTaken]}>
-                <Ionicons
-                  name={med.taken ? 'checkmark' : 'time-outline'}
-                  size={14}
-                  color={med.taken ? PRIMARY_DARK : '#94a3b8'}
-                />
-                <Text style={[styles.medStatusText, med.taken && styles.medStatusTextTaken]}>
-                  {med.taken ? 'Taken' : 'Pending'}
-                </Text>
-              </View>
+        {!medError && (
+          <>
+            <SectionHeader title="Today's Medications" onSeeAll={() => router.push('/(log)/medication')} />
+            <View style={styles.medCard}>
+              {medLoading ? (
+                <View style={[styles.medRow, styles.medSkeleton]} />
+              ) : !todayMed ? null : !todayMed.logged ? (
+                <View style={styles.medRow}>
+                  <View style={styles.medIconBox}>
+                    <Ionicons name="time-outline" size={18} color="#94a3b8" />
+                  </View>
+                  <View style={styles.medInfo}>
+                    <Text style={styles.medName}>HU dose not logged yet</Text>
+                    <Text style={styles.medDose}>Tap to log today's dose</Text>
+                  </View>
+                  <View style={[styles.medStatus]}>
+                    <Ionicons name="time-outline" size={14} color="#94a3b8" />
+                    <Text style={styles.medStatusText}>Pending</Text>
+                  </View>
+                </View>
+              ) : todayMed.hu_taken ? (
+                <View style={styles.medRow}>
+                  <View style={[styles.medIconBox, styles.medIconBoxTaken]}>
+                    <Ionicons name="medkit" size={18} color={PRIMARY_DARK} />
+                  </View>
+                  <View style={styles.medInfo}>
+                    <Text style={styles.medName}>HU {todayMed.dose_mg} mg — taken today</Text>
+                    <Text style={styles.medDose}>Logged today</Text>
+                  </View>
+                  <View style={[styles.medStatus, styles.medStatusTaken]}>
+                    <Ionicons name="checkmark" size={14} color={PRIMARY_DARK} />
+                    <Text style={[styles.medStatusText, styles.medStatusTextTaken]}>Taken</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.medRow}>
+                  <View style={[styles.medIconBox, styles.medIconBoxSkipped]}>
+                    <Ionicons name="medkit" size={18} color="#d97706" />
+                  </View>
+                  <View style={styles.medInfo}>
+                    <Text style={styles.medName}>HU dose skipped today</Text>
+                    <Text style={styles.medDose}>Logged as skipped</Text>
+                  </View>
+                  <View style={[styles.medStatus, styles.medStatusSkipped]}>
+                    <Ionicons name="close" size={14} color="#d97706" />
+                    <Text style={[styles.medStatusText, styles.medStatusTextSkipped]}>Skipped</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Log dose shortcut when not yet logged */}
+              {todayMed && !todayMed.logged && (
+                <TouchableOpacity
+                  style={styles.logDoseBtn}
+                  activeOpacity={0.8}
+                  onPress={() => router.push('/(log)/medication')}
+                >
+                  <Text style={styles.logDoseBtnText}>Log dose</Text>
+                  <Ionicons name="arrow-forward" size={14} color={PRIMARY_DARK} />
+                </TouchableOpacity>
+              )}
             </View>
-          ))}
-        </View>
+          </>
+        )}
 
         {/* ── Quick Actions ── */}
         <SectionHeader title="Quick Actions" />
@@ -191,6 +280,7 @@ export default function HomeScreen() {
               key={a.label}
               style={[styles.actionCard, { width: CARD_W }, a.variant === 'dark' && styles.actionCardDark]}
               activeOpacity={0.8}
+              onPress={() => router.push(a.href)}
             >
               <View style={[
                 styles.actionIconBox,
@@ -219,48 +309,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f0f9f4' },
   scroll:    { paddingHorizontal: 20, paddingTop: 16 },
 
-  // Header
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  avatar: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: `${PRIMARY}18`,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  headerText: { flex: 1 },
-  headerSmall: { fontSize: 12, fontFamily: Fonts.body, color: '#64748b' },
-  headerName:  { fontSize: 16, fontFamily: Fonts.bodyBold, color: '#0f172a' },
-  bellBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.07, shadowRadius: 4 },
-      android: { elevation: 2 },
-    }),
-  },
-  notifDot: {
-    position: 'absolute', top: 10, right: 10,
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: '#ef4444',
-    borderWidth: 1.5, borderColor: '#fff',
-  },
-
   // Risk card
   riskCard: { borderRadius: 22, padding: 20, marginBottom: 24 },
   riskTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   riskCardLabel: { fontSize: 12, fontFamily: Fonts.body, color: 'rgba(255,255,255,0.75)' },
   stablePill: {
-    backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 12,
+    borderRadius: 12,
     paddingHorizontal: 10, paddingVertical: 4,
     flexDirection: 'row', alignItems: 'center', gap: 5,
   },
-  stableDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: PRIMARY },
-  stableText: { fontSize: 10, fontFamily: Fonts.bodyBold, color: PRIMARY_DARK, letterSpacing: 0.8 },
+  stableDot: { width: 6, height: 6, borderRadius: 3 },
+  stableText: { fontSize: 10, fontFamily: Fonts.bodyBold, letterSpacing: 0.8 },
   riskMain: { fontSize: 34, fontFamily: Fonts.headingBold, color: '#fff', marginBottom: 6 },
   riskSub:  { fontSize: 15, fontFamily: Fonts.body, color: 'rgba(255,255,255,0.85)' },
   riskDesc: { fontSize: 12, fontFamily: Fonts.body, color: 'rgba(255,255,255,0.7)', lineHeight: 18, marginBottom: 16 },
@@ -330,8 +389,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10, paddingVertical: 5,
   },
   medStatusTaken: { backgroundColor: `${PRIMARY}18` },
+  medStatusSkipped: { backgroundColor: '#fef3c7' },
   medStatusText: { fontSize: 11, fontFamily: Fonts.bodySemiBold, color: '#94a3b8' },
   medStatusTextTaken: { color: PRIMARY_DARK },
+  medStatusTextSkipped: { color: '#d97706' },
+  medIconBoxSkipped: { backgroundColor: '#fef3c7' },
+  medSkeleton: { height: 72, backgroundColor: '#f1f5f9', borderRadius: 8 },
+  logDoseBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#f1f5f9',
+  },
+  logDoseBtnText: { fontSize: 13, fontFamily: Fonts.bodySemiBold, color: PRIMARY_DARK },
 
   // Quick actions
   grid: { flexDirection: 'row', flexWrap: 'wrap' },

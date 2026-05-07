@@ -18,6 +18,11 @@ import {
   Syne_800ExtraBold,
   useFonts as useSyne,
 } from '@expo-google-fonts/syne';
+import { AppQueryProvider } from '@/providers/app-query-provider';
+import { tokenStore } from '@/lib/api';
+import { secureStorageAdapter } from '@/lib/api/secure-storage-adapter';
+
+tokenStore.configureAdapter(secureStorageAdapter);
 
 SplashScreen.preventAutoHideAsync();
 
@@ -50,14 +55,17 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="index" options={{ headerShown: false }} />
-        <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-    </ThemeProvider>
+    <AppQueryProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <Stack>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade' }} />
+          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="(log)" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+      </ThemeProvider>
+    </AppQueryProvider>
   );
 }

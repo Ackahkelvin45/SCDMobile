@@ -11,7 +11,9 @@ import { StatusBar } from 'expo-status-bar';
 import LottieView from 'lottie-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { PRIMARY, PRIMARY_DARK, Fonts } from '../constants/theme';
+import { tokenStore } from '@/lib/api';
 const { width } = Dimensions.get('window');
+const SPLASH_DURATION_MS = 2200;
 
 export default function SplashScreen() {
   const containerOpacity = useRef(new Animated.Value(0)).current;
@@ -21,6 +23,8 @@ export default function SplashScreen() {
   const taglineOpacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    const tokensPromise = tokenStore.getTokens();
+
     // 1. Fade the whole screen in
     Animated.timing(containerOpacity, {
       toValue: 1,
@@ -64,13 +68,18 @@ export default function SplashScreen() {
       }),
     ]).start();
 
-    // Navigate to onboarding after animation
-    const timer = setTimeout(() => {
-      router.replace('/onboarding');
-    }, 6000);
+    // Navigate based on auth state after animation
+    const timer = setTimeout(async () => {
+      const tokens = await tokensPromise;
+      if (tokens?.accessToken) {
+        router.replace('/(tabs)');
+      } else {
+        router.replace('/onboarding');
+      }
+    }, SPLASH_DURATION_MS);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [containerOpacity, lottieScale, taglineOpacity, textOpacity, textTranslateY]);
 
   return (
     <Animated.View style={[styles.fill, { opacity: containerOpacity }]}>

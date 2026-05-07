@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -14,15 +15,36 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useLogin } from "@/features/auth/hooks";
 import { Fonts, PRIMARY, PRIMARY_DARK } from "../../constants/theme";
 
-const BG = "#e1f3ec31";
+const BG = "#f0faf5";
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const loginMutation = useLogin();
+
+  const apiErrorMessage =
+    loginMutation.error instanceof Error ? loginMutation.error.message : null;
+
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setLocalError("Please enter both email and password.");
+      return;
+    }
+
+    setLocalError(null);
+    await loginMutation.mutateAsync({
+      email: email.trim(),
+      password,
+    });
+
+    router.replace("/(tabs)");
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -53,7 +75,7 @@ export default function LoginScreen() {
 
           {/* Header */}
           <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to continue your journey.</Text>
+          <Text style={styles.subtitle}>Sign in to manage your clinic visits and HU response.</Text>
 
           {/* Form */}
           <View style={styles.form}>
@@ -108,17 +130,37 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={styles.primaryBtn}
             activeOpacity={0.85}
-            onPress={() => router.replace("/(tabs)")}
+            onPress={handleLogin}
+            disabled={loginMutation.isPending}
           >
             <LinearGradient
               colors={[PRIMARY, PRIMARY_DARK]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.gradient}
+              style={[
+                styles.gradient,
+                loginMutation.isPending && styles.gradientDisabled,
+              ]}
             >
-              <Text style={styles.primaryBtnText}>Sign in</Text>
+              <View style={styles.primaryBtnContent}>
+                {loginMutation.isPending ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : null}
+                <Text
+                  style={[
+                    styles.primaryBtnText,
+                    loginMutation.isPending && styles.primaryBtnTextWithSpinner,
+                  ]}
+                >
+                  {loginMutation.isPending ? "Signing in..." : "Sign in"}
+                </Text>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
+
+          {(localError || apiErrorMessage) && (
+            <Text style={styles.errorText}>{localError ?? apiErrorMessage}</Text>
+          )}
 
           {/* Footer */}
           <TouchableOpacity
@@ -126,7 +168,7 @@ export default function LoginScreen() {
             activeOpacity={0.7}
             onPress={() => router.replace("/(auth)/register")}
           >
-            <Text style={styles.footerText}>Don't have an account? </Text>
+            <Text style={styles.footerText}>Don&apos;t have an account? </Text>
             <Text style={[styles.footerText, styles.footerLink]}>Sign up</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -240,11 +282,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  primaryBtnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  gradientDisabled: {
+    opacity: 0.75,
+  },
   primaryBtnText: {
     fontSize: 16,
     fontFamily: Fonts.bodyBold,
     color: "#fff",
     letterSpacing: 0.3,
+  },
+  primaryBtnTextWithSpinner: {
+    marginLeft: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: Fonts.body,
+    color: "#dc2626",
+    marginTop: -8,
+    marginBottom: 16,
+    textAlign: "center",
   },
   footerRow: {
     flexDirection: "row",

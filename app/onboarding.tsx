@@ -25,26 +25,26 @@ const SLIDES = [
   {
     id: '1',
     image: require('../assets/images/onboarding/african-american-pediatrician-nurse-discussing-sickness-symptoms-with-sick-little-child.jpg'),
-    tag: 'PERSONALISED CARE',
-    title: 'Your Health &\nWellness On-Demand',
+    tag: 'CLINIC VISITS',
+    title: 'Track Your\nLabs & Health',
     subtitle:
-      'Track symptoms, medications and pain episodes all in one place — built for sickle cell warriors.',
+      'Easily log your clinic visits, track your lab results, and manage your Hydroxyurea treatment over time.',
   },
   {
     id: '2',
     image: require('../assets/images/onboarding/new-test-concentrated-skilled-researchers-wearing-uniform-doing-test-creating-vaccine.jpg'),
-    tag: 'STAY INFORMED',
-    title: 'Wellness On-The-Go\nWith SickleCare',
+    tag: 'AI INSIGHTS',
+    title: 'Predict Your\nHU Response',
     subtitle:
-      'Get personalised insights and smart reminders that keep you ahead of your health every single day.',
+      'Get an AI-powered prediction of your likelihood to respond to Hydroxyurea by your next follow-up visit.',
   },
   {
     id: '3',
     image: require('../assets/images/onboarding/medium-shot-smiley-doctor-checking-patient.jpg'),
-    tag: 'YOUR COMMUNITY',
-    title: 'Wellness At Your\nFingertips',
+    tag: 'EMPOWERED CARE',
+    title: 'Stay Ahead of\nYour Health',
     subtitle:
-      'Connect with your care team, log crises and stay informed with evidence-based sickle cell guidance.',
+      'Work alongside your clinician to monitor your progress, adjust your dose, and make informed decisions.',
   },
 ];
 
@@ -164,7 +164,7 @@ export default function OnboardingScreen() {
         ]).start();
       });
     },
-    [activeIndex, cardOpacity, cardTranslateY]
+    [cardOpacity, cardTranslateY]
   );
 
   //  button press animation                                                    

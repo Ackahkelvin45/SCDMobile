@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   Platform,
   Animated,
@@ -21,7 +20,6 @@ export default function SignupSuccessScreen() {
 
   const imageScale = useRef(new Animated.Value(0.7)).current;
   const imageOpacity = useRef(new Animated.Value(0)).current;
-  const badgeScale = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(0)).current;
   const contentTranslateY = useRef(new Animated.Value(24)).current;
 
@@ -31,13 +29,12 @@ export default function SignupSuccessScreen() {
         Animated.spring(imageScale, { toValue: 1, tension: 60, friction: 8, useNativeDriver: true }),
         Animated.timing(imageOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
       ]),
-      Animated.spring(badgeScale, { toValue: 1, tension: 80, friction: 6, useNativeDriver: true }),
       Animated.parallel([
         Animated.timing(contentOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
         Animated.spring(contentTranslateY, { toValue: 0, tension: 70, friction: 10, useNativeDriver: true }),
       ]),
     ]).start();
-  }, []);
+  }, [contentOpacity, contentTranslateY, imageOpacity, imageScale]);
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 24 }]}>
@@ -61,10 +58,10 @@ export default function SignupSuccessScreen() {
             { opacity: contentOpacity, transform: [{ translateY: contentTranslateY }] },
           ]}
         >
-          <Text style={styles.title}>You're all set!</Text>
+          <Text style={styles.title}>You&apos;re all set!</Text>
           <Text style={styles.subtitle}>
             Your SickleCare account has been created.{'\n'}
-            Let's start managing your health journey.
+            Let&apos;s start managing your health journey.
           </Text>
         </Animated.View>
       </View>
@@ -74,9 +71,9 @@ export default function SignupSuccessScreen() {
         <TouchableOpacity
           style={styles.primaryBtn}
           activeOpacity={0.85}
-          onPress={() => router.replace('/(tabs)')}
+          onPress={() => router.replace('/(auth)/login')}
         >
-          <Text style={styles.primaryBtnText}>Go to Dashboard</Text>
+          <Text style={styles.primaryBtnText}>Login</Text>
           <View style={styles.arrowBox}>
             <Ionicons name="chevron-forward" size={18} color="#fff" />
           </View>
@@ -110,28 +107,6 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
   },
-  badge: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: PRIMARY,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#fff',
-    ...Platform.select({
-      ios: {
-        shadowColor: PRIMARY,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-      },
-      android: { elevation: 6 },
-    }),
-  },
   content: {
     alignItems: 'center',
     marginBottom: 40,
@@ -151,23 +126,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 24,
     marginBottom: 24,
-  },
-  pillRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  pill: {
-    backgroundColor: `${PRIMARY}18`,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  pillText: {
-    fontSize: 12,
-    fontFamily: Fonts.bodySemiBold,
-    color: PRIMARY_DARK,
   },
   btnArea: {
     width: '100%',

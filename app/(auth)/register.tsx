@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   TextInput,
@@ -18,17 +19,41 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PRIMARY, PRIMARY_DARK, Fonts } from '../../constants/theme';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRegister } from '@/features/auth/hooks';
 
-const BG = '#e1f3ec31';
+const BG = '#f0faf5';
 
 const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
 const GENOTYPE_OPTIONS = ['HbSS', 'HbSC', 'HbSβ⁺', 'HbSβ⁰', 'Not sure'];
+const GENDER_API_MAP: Record<string, string> = {
+  Male: 'male',
+  Female: 'female',
+  Other: 'other',
+  'Prefer not to say': 'not_specified',
+};
 
 const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December'];
 const CURRENT_YEAR = new Date().getFullYear();
 const YEARS = Array.from({ length: 100 }, (_, i) => String(CURRENT_YEAR - 1 - i));
+
+function formatDateForApi(displayDate: string): string | null {
+  const [day, monthShort, year] = displayDate.trim().split(' ');
+  if (!day || !monthShort || !year) {
+    return null;
+  }
+
+  const monthIndex = MONTHS.findIndex(
+    (month) => month.slice(0, 3).toLowerCase() === monthShort.toLowerCase()
+  );
+
+  if (monthIndex < 0) {
+    return null;
+  }
+
+  return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${day}`;
+}
 
 type DOBStep = 'day' | 'month' | 'year';
 
@@ -193,11 +218,54 @@ export default function RegisterScreen() {
   const [gender, setGender] = useState('');
   const [genotype, setGenotype] = useState('');
   const [email, setEmail] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [activePicker, setActivePicker] = useState<'gender' | 'genotype' | 'dob' | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
+  const registerMutation = useRegister();
+
+  const apiErrorMessage =
+    registerMutation.error instanceof Error ? registerMutation.error.message : null;
+
+  const handleRegister = async () => {
+    const normalizedDateOfBirth = formatDateForApi(dateOfBirth);
+
+    if (
+      !fullName.trim() ||
+      !normalizedDateOfBirth ||
+      !gender ||
+      !genotype ||
+      !email.trim() ||
+      !phoneNumber.trim() ||
+      !password ||
+      !confirmPassword
+    ) {
+      setLocalError('Please fill all fields before continuing.');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setLocalError('Passwords do not match.');
+      return;
+    }
+
+    setLocalError(null);
+    await registerMutation.mutateAsync({
+      date_of_birth: normalizedDateOfBirth,
+      email: email.trim(),
+      full_name: fullName.trim(),
+      gender: GENDER_API_MAP[gender] ?? gender.toLowerCase(),
+      genotype: genotype.trim(),
+      password,
+      password2: confirmPassword,
+      phone_number: phoneNumber.trim(),
+    });
+
+    router.replace('/(auth)/signup-success');
+  };
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -218,8 +286,8 @@ export default function RegisterScreen() {
           </TouchableOpacity>
 
           {/* Header */}
-          <Text style={styles.title}>Create an account</Text>
-          <Text style={styles.subtitle}>Excited to have you on board!</Text>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Your clinical profile helps personalise your predictions</Text>
 
           {/* ── Personal Information  */}
           <SectionHeader icon="person-outline" label="Personal Information" />
@@ -292,14 +360,28 @@ export default function RegisterScreen() {
           <SectionHeader icon="call-outline" label="Contact & Login" />
 
           <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email or Phone Number</Text>
+            <Text style={styles.label}>Email Address</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter email or phone"
+              placeholder="Enter your email"
               placeholderTextColor="#94a3b8"
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Enter your phone number"
+              placeholderTextColor="#94a3b8"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
               autoCapitalize="none"
               autoCorrect={false}
             />
@@ -347,17 +429,34 @@ export default function RegisterScreen() {
           <TouchableOpacity
             style={styles.primaryBtn}
             activeOpacity={0.85}
-            onPress={() => router.replace('/(auth)/signup-success')}
+            onPress={handleRegister}
+            disabled={registerMutation.isPending}
           >
             <LinearGradient
               colors={[PRIMARY, PRIMARY_DARK]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={styles.gradient}
+              style={[styles.gradient, registerMutation.isPending && styles.gradientDisabled]}
             >
-              <Text style={styles.primaryBtnText}>Create an account</Text>
+              <View style={styles.primaryBtnContent}>
+                {registerMutation.isPending ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : null}
+                <Text
+                  style={[
+                    styles.primaryBtnText,
+                    registerMutation.isPending && styles.primaryBtnTextWithSpinner,
+                  ]}
+                >
+                  {registerMutation.isPending ? 'Creating account...' : 'Create Account'}
+                </Text>
+              </View>
             </LinearGradient>
           </TouchableOpacity>
+
+          {(localError || apiErrorMessage) && (
+            <Text style={styles.errorText}>{localError ?? apiErrorMessage}</Text>
+          )}
 
           {/* Footer */}
           <TouchableOpacity
@@ -538,11 +637,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  gradientDisabled: {
+    opacity: 0.85,
+  },
+  primaryBtnContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   primaryBtnText: {
     fontSize: 16,
     fontFamily: Fonts.bodyBold,
     color: '#fff',
     letterSpacing: 0.3,
+  },
+  primaryBtnTextWithSpinner: {
+    marginLeft: 8,
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: Fonts.body,
+    color: '#dc2626',
+    marginTop: -6,
+    marginBottom: 14,
+    textAlign: 'center',
   },
   footerRow: {
     flexDirection: 'row',
