@@ -74,7 +74,7 @@ export default function SplashScreen() {
       if (tokens?.accessToken) {
         router.replace('/(tabs)');
       } else {
-        router.replace('/onboarding');
+        router.replace('/(auth)/login');
       }
     }, SPLASH_DURATION_MS);
 
@@ -113,13 +113,13 @@ export default function SplashScreen() {
 
         {/* Tagline */}
         <Animated.Text style={[styles.tagline, { opacity: taglineOpacity }]}>
-          Managing sickle cell, one day at a time.
+          Hydroxyurea follow-up for clinicians
         </Animated.Text>
 
         {/* Bottom badge */}
         <Animated.View style={[styles.bottomBadge, { opacity: taglineOpacity }]}>
           <View style={styles.badgeDot} />
-          <Text style={styles.bottomText}>Your health companion</Text>
+          <Text style={styles.bottomText}>For clinicians</Text>
           <View style={styles.badgeDot} />
         </Animated.View>
       </LinearGradient>

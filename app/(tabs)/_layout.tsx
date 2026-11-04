@@ -1,167 +1,71 @@
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { PRIMARY, PRIMARY_DARK, Fonts } from '../../constants/theme';
-import { NavHeader } from '../../components/NavHeader';
 
-type IoniconName = React.ComponentProps<typeof Ionicons>['name'];
+import { C, Fonts } from '@/constants/theme';
+import { useOpenFlags } from '@/hooks/api';
 
-// ─── Tab icon ────────────────────────────────────────────────────────────────
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
-function TabIcon({
-  name,
-  focused,
-  activeName,
-}: {
-  name: IoniconName;
-  focused: boolean;
-  activeName?: IoniconName;
-}) {
-  const icon = focused && activeName ? activeName : name;
-  return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-      <Ionicons name={icon} size={22} color={focused ? PRIMARY_DARK : '#94a3b8'} />
-    </View>
-  );
-}
-
-// ─── Page header (non-home tabs) ─────────────────────────────────────────────
-
-function PageTabHeader({ title }: { title: string }) {
+function TabHeader({ title }: { title: string }) {
   const insets = useSafeAreaInsets();
   return (
-    <View style={[pageHeader.wrap, { paddingTop: insets.top + 6 }]}>
-      <Text style={pageHeader.title}>{title}</Text>
+    <View style={[st.header, { paddingTop: insets.top + 8 }]}>
+      <Text style={st.headerTitle} accessibilityRole="header">{title}</Text>
     </View>
   );
 }
 
-const pageHeader = StyleSheet.create({
-  wrap: {
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.05,
-        shadowRadius: 8,
-      },
-      android: { elevation: 3 },
-    }),
-  },
-  title: {
-    fontSize: 26,
-    fontFamily: Fonts.headingBold,
-    color: '#0f172a',
-  },
-});
-
-// ─── Layout ──────────────────────────────────────────────────────────────────
+const icon = (name: IconName, active: IconName) =>
+  function TabIcon({ focused, color }: { focused: boolean; color: string }) {
+    return <Ionicons name={focused ? active : name} size={24} color={color} />;
+  };
 
 export default function TabLayout() {
+  const openFlags = useOpenFlags().data?.count ?? 0;
   return (
     <Tabs
       screenOptions={{
-        headerShown: true,
-        tabBarShowLabel: true,
-        tabBarActiveTintColor: PRIMARY_DARK,
-        tabBarInactiveTintColor: '#94a3b8',
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.label,
-        tabBarItemStyle: styles.item,
+        tabBarActiveTintColor: C.primaryDark,
+        tabBarInactiveTintColor: C.faint,
+        tabBarLabelStyle: { fontFamily: Fonts.bodySemiBold, fontSize: 11 },
+        tabBarStyle: st.tabBar,
+        sceneStyle: { backgroundColor: C.bg },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
-          header: () => <NavHeader />,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="home-outline" activeName="home" focused={focused} />
-          ),
+          title: 'Today',
+          header: () => <TabHeader title="Today" />,
+          tabBarIcon: icon('today-outline', 'today'),
+          tabBarBadge: openFlags > 0 ? openFlags : undefined,
         }}
       />
       <Tabs.Screen
-        name="log"
-        options={{
-          title: 'Log Data',
-          header: () => <PageTabHeader title="Log Data" />,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="add-circle-outline" activeName="add-circle" focused={focused} />
-          ),
-        }}
+        name="patients"
+        options={{ title: 'Patients', header: () => <TabHeader title="Patients" />, tabBarIcon: icon('people-outline', 'people') }}
       />
       <Tabs.Screen
-        name="predict"
-        options={{
-          title: 'Prediction',
-          header: () => <PageTabHeader title="HU Response" />,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="analytics-outline" activeName="analytics" focused={focused} />
-          ),
-        }}
+        name="new-visit"
+        options={{ title: 'New Visit', header: () => <TabHeader title="New visit" />, tabBarIcon: icon('add-circle-outline', 'add-circle') }}
       />
       <Tabs.Screen
-        name="history"
-        options={{
-          title: 'History',
-          header: () => <PageTabHeader title="History" />,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="time-outline" activeName="time" focused={focused} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Profile',
-          header: () => <PageTabHeader title="Profile" />,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon name="person-outline" activeName="person" focused={focused} />
-          ),
-        }}
+        name="account"
+        options={{ title: 'Account', header: () => <TabHeader title="Account" />, tabBarIcon: icon('person-circle-outline', 'person-circle') }}
       />
     </Tabs>
   );
 }
 
-const styles = StyleSheet.create({
+const st = StyleSheet.create({
+  header: { backgroundColor: C.surface, paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: C.line },
+  headerTitle: { fontFamily: Fonts.headingBold, fontSize: 24, color: C.text },
   tabBar: {
-    backgroundColor: '#fff',
-    borderTopWidth: 0,
-    height: Platform.OS === 'ios' ? 88 : 68,
-    paddingBottom: Platform.OS === 'ios' ? 28 : 8,
-    paddingTop: 8,
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.06,
-        shadowRadius: 12,
-      },
-      android: { elevation: 12 },
-    }),
-  },
-  label: {
-    fontSize: 11,
-    fontFamily: 'Mulish_600SemiBold',
-    marginTop: 2,
-  },
-  item: {
-    paddingTop: 4,
-  },
-  iconWrap: {
-    width: 40,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-  },
-  iconWrapActive: {
-    backgroundColor: `${PRIMARY}18`,
+    backgroundColor: C.surface,
+    borderTopColor: C.line,
+    ...Platform.select({ android: { height: 64, paddingBottom: 8, paddingTop: 6 } }),
   },
 });

@@ -26,6 +26,25 @@ export const Colors = {
   },
 };
 
+/** App palette (light only, clinic use). */
+export const C = {
+  bg: '#f6f8f7',
+  surface: '#ffffff',
+  text: '#0f172a',
+  muted: '#64748b',
+  faint: '#94a3b8',
+  line: '#e2e8f0',
+  primary: PRIMARY,
+  primaryDark: PRIMARY_DARK,
+  primarySoft: '#dcfce7',
+  danger: '#b91c1c',
+  dangerSoft: '#fee2e2',
+  warn: '#92400e',
+  warnSoft: '#fef3c7',
+  info: '#075985',
+  infoSoft: '#e0f2fe',
+};
+
 export const Fonts = {
   body: 'Mulish_400Regular',
   bodyMedium: 'Mulish_500Medium',
