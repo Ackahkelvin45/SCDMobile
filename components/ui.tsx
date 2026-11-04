@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useState } from 'react';
 import {
-  ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView,
+  ActivityIndicator, FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView,
   StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -230,6 +230,81 @@ export function DateField({
   );
 }
 
+/** Dropdown field that opens a scrollable bottom sheet. Shows a search box once there are more than 8 options. */
+export function SelectField<T extends string>({
+  label, placeholder = 'Select', options, value, onChange, error, hint, sheetTitle,
+}: {
+  label: string;
+  placeholder?: string;
+  options: { value: T; label: string; sublabel?: string }[];
+  value: T | null | undefined;
+  onChange: (v: T) => void;
+  error?: string;
+  hint?: string;
+  sheetTitle?: string;
+}) {
+  const insets = useSafeAreaInsets();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const selected = options.find((o) => o.value === value);
+  const q = query.trim().toLowerCase();
+  const shown = q ? options.filter((o) => `${o.label} ${o.sublabel ?? ''}`.toLowerCase().includes(q)) : options;
+  const close = () => { setOpen(false); setQuery(''); };
+
+  return (
+    <View style={s.field}>
+      <Text style={s.label}>{label}</Text>
+      <Pressable onPress={() => setOpen(true)} accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? 'not selected'}`}
+        accessibilityHint="Opens a list to choose from" style={[s.inputWrap, error ? { borderColor: C.danger } : null]}>
+        <Text style={[s.input, { paddingVertical: 14 }, !selected && { color: C.faint }]} numberOfLines={1}>
+          {selected?.label ?? placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={C.muted} style={{ marginRight: 12 }} />
+      </Pressable>
+      {error ? <Text style={s.error}>{error}</Text> : hint ? <Text style={s.hint}>{hint}</Text> : null}
+
+      <Modal visible={open} transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
+        <Pressable style={s.sheetBackdrop} onPress={close} accessibilityLabel="Close list" />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
+          <View style={s.sheetHandle} />
+          <View style={s.sheetHeader}>
+            <Text style={s.modalTitle}>{sheetTitle ?? label}</Text>
+            <Pressable onPress={close} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+              <Ionicons name="close" size={24} color={C.muted} />
+            </Pressable>
+          </View>
+          {options.length > 8 ? (
+            <View style={[s.inputWrap, { marginHorizontal: 16, marginBottom: 8 }]}>
+              <Ionicons name="search" size={18} color={C.muted} style={{ marginLeft: 12 }} />
+              <TextInput value={query} onChangeText={setQuery} placeholder="Search" placeholderTextColor={C.faint}
+                style={s.input} autoCorrect={false} accessibilityLabel={`Search ${label}`} />
+            </View>
+          ) : null}
+          <FlatList
+            data={shown}
+            keyExtractor={(o) => o.value}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={<Text style={[s.hint, { padding: 16, textAlign: 'center' }]}>No matches</Text>}
+            renderItem={({ item }) => {
+              const on = item.value === value;
+              return (
+                <Pressable onPress={() => { onChange(item.value); close(); }} accessibilityRole="radio" accessibilityState={{ selected: on }}
+                  style={({ pressed }) => [s.option, pressed && { backgroundColor: C.bg }]}>
+                  <View style={s.fill}>
+                    <Text style={[s.optionText, on && { color: C.primaryDark }]}>{item.label}</Text>
+                    {item.sublabel ? <Text style={s.hint}>{item.sublabel}</Text> : null}
+                  </View>
+                  {on ? <Ionicons name="checkmark-circle" size={22} color={C.primaryDark} /> : null}
+                </Pressable>
+              );
+            }}
+          />
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
 // ─── Status ──────────────────────────────────────────────────────────────────
 export function SeverityBadge({ severity }: { severity: FlagSeverity }) {
   const st = SEVERITY_STYLE[severity];
@@ -382,6 +457,12 @@ const s = StyleSheet.create({
   emptyTitle: { fontFamily: Fonts.headingBold, fontSize: 16, color: C.text, textAlign: 'center' },
   emptyBody: { fontFamily: Fonts.body, fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48, backgroundColor: C.bg },
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)' },
+  sheet: { maxHeight: '75%', backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8 },
+  sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.line, marginBottom: 8 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 12 },
+  option: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: C.line },
+  optionText: { fontFamily: Fonts.bodySemiBold, fontSize: 16, color: C.text },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)', justifyContent: 'center', padding: 20 },
   modalCard: { backgroundColor: C.surface, borderRadius: 16, padding: 20, gap: 12 },
   modalTitle: { fontFamily: Fonts.headingBold, fontSize: 18, color: C.text },

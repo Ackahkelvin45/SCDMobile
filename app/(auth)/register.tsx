@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Banner, Button, Chip, ErrorState, Loading, Screen, TextField, ui } from '@/components/ui';
+import { Banner, Button, ErrorState, Loading, Screen, SelectField, TextField, ui } from '@/components/ui';
 import { C, Fonts } from '@/constants/theme';
 import { useFacilities, useSignUp } from '@/hooks/api';
 import { errorMessage, fieldErrors } from '@/lib/api/api-error';
@@ -82,22 +82,24 @@ export default function RegisterScreen() {
       <TextField label="Licence number" value={form.license_number} onChangeText={set('license_number')} error={errors.license_number}
         autoCapitalize="characters" hint="Medical and Dental Council registration number" />
 
-      <View style={{ gap: 6 }}>
-        <Text style={st.label}>Facility</Text>
-        {facilities.isLoading ? <Loading /> : facilities.isError ? (
-          <ErrorState message={errorMessage(facilities.error)} onRetry={() => facilities.refetch()} />
-        ) : !facilities.data?.length ? (
+      {facilities.isLoading ? <Loading /> : facilities.isError ? (
+        <ErrorState message={errorMessage(facilities.error)} onRetry={() => facilities.refetch()} />
+      ) : !facilities.data?.length ? (
+        <View style={{ gap: 6 }}>
+          <Text style={st.label}>Facility</Text>
           <Text style={ui.muted}>No facilities available yet. Contact your administrator.</Text>
-        ) : (
-          // ponytail: chip list is fine for a handful of facilities; switch to a searchable modal if the list grows.
-          <View style={ui.wrap}>
-            {facilities.data.map((f) => (
-              <Chip key={f.id} label={f.name} selected={form.facility_id === f.id} onPress={() => set('facility_id')(f.id)} />
-            ))}
-          </View>
-        )}
-        {errors.facility_id ? <Text style={st.error}>{errors.facility_id}</Text> : null}
-      </View>
+        </View>
+      ) : (
+        <SelectField
+          label="Facility"
+          placeholder="Select your facility"
+          sheetTitle="Choose your facility"
+          options={facilities.data.map((f) => ({ value: f.id, label: f.name, sublabel: f.region }))}
+          value={form.facility_id || null}
+          onChange={set('facility_id')}
+          error={errors.facility_id}
+        />
+      )}
 
       <TextField label="Password" value={form.password} onChangeText={set('password')} error={errors.password}
         secureTextEntry autoComplete="new-password" textContentType="newPassword" hint="At least 8 characters" />
@@ -113,5 +115,4 @@ export default function RegisterScreen() {
 const st = StyleSheet.create({
   back: { width: 44, height: 44, justifyContent: 'center', marginLeft: -8 },
   label: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: C.text },
-  error: { fontFamily: Fonts.bodySemiBold, fontSize: 12, color: C.danger },
 });
