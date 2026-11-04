@@ -250,6 +250,7 @@ export function SelectField<T extends string>({
   const q = query.trim().toLowerCase();
   const shown = q ? options.filter((o) => `${o.label} ${o.sublabel ?? ''}`.toLowerCase().includes(q)) : options;
   const close = () => { setOpen(false); setQuery(''); };
+  const searchable = options.length > 8;
 
   return (
     <View style={s.field}>
@@ -265,7 +266,9 @@ export function SelectField<T extends string>({
 
       <Modal visible={open} transparent animationType="slide" onRequestClose={close} statusBarTranslucent navigationBarTranslucent>
         <Pressable style={s.sheetBackdrop} onPress={close} accessibilityLabel="Close list" />
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={[s.sheet, { paddingBottom: insets.bottom + 8 }]}>
+        {/* Searchable sheets are pinned near the top: Android doesn't lift a translucent modal above the keyboard,
+            so a bottom-anchored sheet ends up hidden behind it while typing. */}
+        <View style={[s.sheet, searchable && [StyleSheet.absoluteFill, { top: insets.top + 48, maxHeight: undefined }], { paddingBottom: insets.bottom + 8 }]}>
           <View style={s.sheetHandle} />
           <View style={s.sheetHeader}>
             <Text style={s.modalTitle}>{sheetTitle ?? label}</Text>
@@ -273,7 +276,7 @@ export function SelectField<T extends string>({
               <Ionicons name="close" size={24} color={C.muted} />
             </Pressable>
           </View>
-          {options.length > 8 ? (
+          {searchable ? (
             <View style={[s.inputWrap, { marginHorizontal: 16, marginBottom: 8 }]}>
               <Ionicons name="search" size={18} color={C.muted} style={{ marginLeft: 12 }} />
               <TextInput value={query} onChangeText={setQuery} placeholder="Search" placeholderTextColor={C.faint}
@@ -299,7 +302,7 @@ export function SelectField<T extends string>({
               );
             }}
           />
-        </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
