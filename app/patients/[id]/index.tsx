@@ -5,7 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { LineChart } from '@/components/LineChart';
 import {
-  Button, Card, EmptyState, ErrorState, KeyValue, Loading, Screen, SectionTitle, Segmented, SeverityBadge, ui,
+  Button, Card, EmptyState, ErrorState, KeyValue, Loading, Screen, SectionTitle, SeverityBadge, ui,
 } from '@/components/ui';
 import { VisitHistoryItem } from '@/components/VisitHistoryItem';
 import { BASELINE_SOURCES, classLabel, GENOTYPES } from '@/constants/clinical';
@@ -15,9 +15,7 @@ import { ApiError, errorMessage } from '@/lib/api/api-error';
 import type { ModelResult, PatientDetail, PredictedClass } from '@/lib/api/types';
 import { formatDate, formatDelta, roundTo5Percent } from '@/lib/clinical';
 
-type Period = '6m' | '12m' | 'all';
 type OkResult = Extract<ModelResult, { predicted_class: PredictedClass }>;
-const val = (n: number | null | undefined, unit = '') => (n === null || n === undefined ? '—' : `${n}${unit}`);
 
 export default function PatientProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -133,7 +131,7 @@ export default function PatientProfileScreen() {
         )}
       </Card>
 
-      <Analytics id={id} />
+      <AnalyticsSummary p={p} />
 
       <SectionTitle title="Recent history" action="See all" onAction={go.history} />
       {visits.isLoading ? <Loading /> : visits.isError ? (
@@ -186,31 +184,18 @@ function LatestPrediction({ p }: { p: PatientDetail }) {
   );
 }
 
-function Analytics({ id }: { id: string }) {
-  const [period, setPeriod] = useState<Period>('all');
-  const q = usePatient(id, period);
-  const a = q.data?.analytics;
+/** Short summary; the full breakdown lives on /patients/[id]/analytics. */
+function AnalyticsSummary({ p }: { p: PatientDetail }) {
+  const a = p.analytics;
+  const open = () => router.push({ pathname: '/patients/[id]/analytics', params: { id: p.id } });
   return (
     <>
-      <SectionTitle title="Analytics" />
+      <SectionTitle title="Analytics" action="View analytics" onAction={open} />
       <Card>
-        <Segmented value={period} onChange={setPeriod}
-          options={[{ value: '6m', label: '6 months' }, { value: '12m', label: '12 months' }, { value: 'all', label: 'All' }]} />
-        {q.isLoading ? <Loading /> : !a ? (
-          <ErrorState message={errorMessage(q.error)} onRetry={() => q.refetch()} />
-        ) : (
-          <>
-            <KeyValue label="Visits" value={String(a.visit_count)} />
-            <KeyValue label="Hb min / mean / max" value={`${val(a.hgb.min)} / ${val(a.hgb.mean)} / ${val(a.hgb.max)} g/dL`} />
-            <KeyValue label="Visits meeting criterion" value={`${a.hgb.visits_meeting_criterion} of ${a.hgb.visits_assessed} assessed`} />
-            <KeyValue label="MCV change" value={a.mcv.change === null ? '—' : `${formatDelta(a.mcv.change, 0)} fL (${val(a.mcv.first)} → ${val(a.mcv.latest)})`} />
-            <KeyValue label="Dose changes" value={String(a.dose.changes)} />
-            <KeyValue label="Adherence good / partial / poor" value={`${a.adherence.good} / ${a.adherence.partial} / ${a.adherence.poor}`} />
-            <KeyValue label="Flags (critical)" value={`${a.toxicity.flags_total} (${a.toxicity.critical})`} />
-            <KeyValue label="Pain episodes" value={`${a.pain_episodes.total} · ${val(a.pain_episodes.per_visit_avg)} per visit`} />
-            <KeyValue label="Transfusions reported" value={String(a.transfusions_reported)} />
-          </>
-        )}
+        <KeyValue label="Visits" value={String(a.visit_count)} />
+        <KeyValue label="Visits meeting criterion" value={`${a.hgb.visits_meeting_criterion} of ${a.hgb.visits_assessed} assessed`} />
+        <KeyValue label="Safety flags (critical)" value={`${a.toxicity.flags_total} (${a.toxicity.critical})`} />
+        <Button title="View full analytics" variant="secondary" icon="stats-chart-outline" onPress={open} />
       </Card>
     </>
   );

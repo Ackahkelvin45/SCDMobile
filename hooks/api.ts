@@ -189,13 +189,14 @@ export function useUpdateVisit(visitId: string) {
   });
 }
 
-export function useTrends(patientId: string | undefined, labs: string[]) {
+export function useTrends(patientId: string | undefined, labs: string[], from?: string) {
   const enabled = useAuthed() && !!patientId;
-  const key = labs.join(',');
+  const key = `${labs.join(',')}|${from ?? 'all'}`;
   return useQuery({
     enabled,
     queryKey: K.trends(patientId ?? '', key),
-    queryFn: () => api.getTrends(patientId!, labs),
+    queryFn: () => api.getTrends(patientId!, labs, from ? { from } : undefined),
+    placeholderData: keepPreviousData, // period switch keeps the old charts visible while loading
   });
 }
 

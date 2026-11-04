@@ -69,6 +69,18 @@ export const FLAG_ACTIONS: { value: FlagAction; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+/** Safety-flag rule codes from the server (spec §6) in plain words. */
+export const FLAG_RULE_LABELS: Record<string, string> = {
+  anc_critical: 'Severe neutropenia (ANC < 1.0)',
+  anc_low: 'Neutropenia (ANC below floor)',
+  hgb_critical: 'Severe anaemia (Hb < 4.5)',
+  platelets_low: 'Thrombocytopenia (platelets < 80)',
+  arc_low: 'Reticulocytopenia (ARC < 80, Hb < 9)',
+  hgb_drop: 'Hb fall ≥ 2 g/dL',
+  pregnant: 'Pregnancy',
+  pregnancy_planning: 'Planning pregnancy',
+};
+
 export const SEVERITY_STYLE: Record<FlagSeverity, { bg: string; fg: string; label: string }> = {
   critical: { bg: '#FEE2E2', fg: '#B91C1C', label: 'Critical' },
   warning: { bg: '#FEF3C7', fg: '#92400E', label: 'Warning' },
