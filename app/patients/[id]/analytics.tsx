@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { LineChart } from '@/components/LineChart';
-import { Card, ErrorState, KeyValue, Loading, Screen, SectionTitle, Segmented, ui } from '@/components/ui';
+import { Card, ErrorState, KeyValue, Loading, Screen, SectionTitle, Segmented, StatTile, ui } from '@/components/ui';
 import { FLAG_RULE_LABELS, GENOTYPES } from '@/constants/clinical';
 import { C, Fonts } from '@/constants/theme';
 import { useConfig, usePatient, useTrends } from '@/hooks/api';
@@ -76,13 +76,13 @@ export default function PatientAnalyticsScreen() {
 
       <Segmented value={period} onChange={setPeriod} options={PERIODS} />
 
-      <View style={st.tiles}>
-        <Tile label="Visits" value={String(a.visit_count)} />
-        <Tile label="Latest Hb vs baseline" value={obs?.delta_hgb != null ? `${formatDelta(obs.delta_hgb)}` : '—'} unit="g/dL"
+      <View style={ui.tiles}>
+        <StatTile label="Visits" value={String(a.visit_count)} />
+        <StatTile label="Latest Hb vs baseline" value={obs?.delta_hgb != null ? `${formatDelta(obs.delta_hgb)}` : '—'} unit="g/dL"
           tone={obs?.meets_criterion === true ? 'good' : obs?.meets_criterion === false ? 'warn' : undefined} />
-        <Tile label="Safety flags" value={String(a.toxicity.flags_total)} sub={a.toxicity.critical ? `${a.toxicity.critical} critical` : undefined}
+        <StatTile label="Safety flags" value={String(a.toxicity.flags_total)} sub={a.toxicity.critical ? `${a.toxicity.critical} critical` : undefined}
           tone={a.toxicity.critical ? 'bad' : undefined} />
-        <Tile label="Pain episodes" value={String(a.pain_episodes.total)} sub={a.pain_episodes.per_visit_avg != null ? `${a.pain_episodes.per_visit_avg} per visit` : undefined} />
+        <StatTile label="Pain episodes" value={String(a.pain_episodes.total)} sub={a.pain_episodes.per_visit_avg != null ? `${a.pain_episodes.per_visit_avg} per visit` : undefined} />
       </View>
 
       <SectionTitle title="Response to HU" />
@@ -168,17 +168,6 @@ function TrendChart({ trends, loading, error, onRetry, lab, title, unit }: {
   );
 }
 
-function Tile({ label, value, unit, sub, tone }: { label: string; value: string; unit?: string; sub?: string; tone?: 'good' | 'warn' | 'bad' }) {
-  const color = tone === 'good' ? C.primaryDark : tone === 'warn' ? C.warn : tone === 'bad' ? C.danger : C.text;
-  return (
-    <View style={st.tile} accessible accessibilityLabel={`${label}: ${value}${unit ? ` ${unit}` : ''}${sub ? `, ${sub}` : ''}`}>
-      <Text style={st.tileLabel}>{label}</Text>
-      <Text style={[st.tileValue, { color }]}>{value}{unit ? <Text style={st.tileUnit}> {unit}</Text> : null}</Text>
-      {sub ? <Text style={st.tileSub}>{sub}</Text> : null}
-    </View>
-  );
-}
-
 function Bar({ fraction, color, label }: { fraction: number; color: string; label: string }) {
   return (
     <View style={{ gap: 4 }} accessible accessibilityLabel={label}>
@@ -198,12 +187,6 @@ function Legend({ color, text }: { color: string; text: string }) {
 }
 
 const st = StyleSheet.create({
-  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 14, gap: 2 },
-  tileLabel: { fontFamily: Fonts.bodySemiBold, fontSize: 12, color: C.muted },
-  tileValue: { fontFamily: Fonts.headingBold, fontSize: 26 },
-  tileUnit: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: C.muted },
-  tileSub: { fontFamily: Fonts.body, fontSize: 12, color: C.muted },
   track: { height: 10, borderRadius: 5, backgroundColor: C.line, overflow: 'hidden' },
   fill: { height: 10, borderRadius: 5 },
   stack: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: C.line },

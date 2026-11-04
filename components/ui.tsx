@@ -308,6 +308,23 @@ export function SelectField<T extends string>({
   );
 }
 
+// ─── Stat tile ───────────────────────────────────────────────────────────────
+/** Big-number tile; lay several out inside a `ui.tiles` row. Tappable when onPress is given. */
+export function StatTile({ label, value, unit, sub, tone, onPress }: {
+  label: string; value: string; unit?: string; sub?: string; tone?: 'good' | 'warn' | 'bad'; onPress?: () => void;
+}) {
+  const color = tone === 'good' ? C.primaryDark : tone === 'warn' ? C.warn : tone === 'bad' ? C.danger : C.text;
+  return (
+    <Pressable onPress={onPress} disabled={!onPress} accessibilityRole={onPress ? 'button' : 'summary'}
+      accessibilityLabel={`${label}: ${value}${unit ? ` ${unit}` : ''}${sub ? `, ${sub}` : ''}`}
+      style={({ pressed }) => [s.tile, pressed && { opacity: 0.8 }]}>
+      <Text style={s.tileLabel}>{label}</Text>
+      <Text style={[s.tileValue, { color }]}>{value}{unit ? <Text style={s.tileUnit}> {unit}</Text> : null}</Text>
+      {sub ? <Text style={s.tileSub}>{sub}</Text> : null}
+    </Pressable>
+  );
+}
+
 // ─── Status ──────────────────────────────────────────────────────────────────
 export function SeverityBadge({ severity }: { severity: FlagSeverity }) {
   const st = SEVERITY_STYLE[severity];
@@ -412,6 +429,7 @@ export function TextPromptModal({
 export const ui = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   muted: { fontFamily: Fonts.body, fontSize: 13, color: C.muted },
   body: { fontFamily: Fonts.body, fontSize: 15, color: C.text, lineHeight: 21 },
   bodyBold: { fontFamily: Fonts.bodyBold, fontSize: 15, color: C.text },
@@ -460,6 +478,11 @@ const s = StyleSheet.create({
   emptyTitle: { fontFamily: Fonts.headingBold, fontSize: 16, color: C.text, textAlign: 'center' },
   emptyBody: { fontFamily: Fonts.body, fontSize: 14, color: C.muted, textAlign: 'center', lineHeight: 20 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 48, backgroundColor: C.bg },
+  tile: { flexGrow: 1, flexBasis: '45%', backgroundColor: C.surface, borderWidth: 1, borderColor: C.line, borderRadius: 14, padding: 14, gap: 2 },
+  tileLabel: { fontFamily: Fonts.bodySemiBold, fontSize: 12, color: C.muted },
+  tileValue: { fontFamily: Fonts.headingBold, fontSize: 26 },
+  tileUnit: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: C.muted },
+  tileSub: { fontFamily: Fonts.body, fontSize: 12, color: C.muted },
   sheetBackdrop: { flex: 1, backgroundColor: 'rgba(15,23,42,0.45)' },
   sheet: { maxHeight: '75%', backgroundColor: C.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingTop: 8 },
   sheetHandle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.line, marginBottom: 8 },
