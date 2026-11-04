@@ -1,796 +1,117 @@
-import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Modal,
-  Pressable,
-  FlatList,
-} from 'react-native';
-import { router } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { PRIMARY, PRIMARY_DARK, Fonts } from '../../constants/theme';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRegister } from '@/features/auth/hooks';
+import { router } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const BG = '#f0faf5';
+import { Banner, Button, Chip, ErrorState, Loading, Screen, TextField, ui } from '@/components/ui';
+import { C, Fonts } from '@/constants/theme';
+import { useFacilities, useSignUp } from '@/hooks/api';
+import { errorMessage, fieldErrors } from '@/lib/api/api-error';
+import type { SignUpPayload } from '@/lib/api/types';
 
-const GENDER_OPTIONS = ['Male', 'Female', 'Other', 'Prefer not to say'];
-const GENOTYPE_OPTIONS = ['HbSS', 'HbSC', 'HbSβ⁺', 'HbSβ⁰', 'Not sure'];
-const GENDER_API_MAP: Record<string, string> = {
-  Male: 'male',
-  Female: 'female',
-  Other: 'other',
-  'Prefer not to say': 'not_specified',
+type Form = SignUpPayload;
+const EMPTY: Form = {
+  full_name: '', email: '', phone_number: '', license_number: '', facility_id: '', password: '', password2: '',
 };
 
-const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0'));
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'];
-const CURRENT_YEAR = new Date().getFullYear();
-const YEARS = Array.from({ length: 100 }, (_, i) => String(CURRENT_YEAR - 1 - i));
-
-function formatDateForApi(displayDate: string): string | null {
-  const [day, monthShort, year] = displayDate.trim().split(' ');
-  if (!day || !monthShort || !year) {
-    return null;
-  }
-
-  const monthIndex = MONTHS.findIndex(
-    (month) => month.slice(0, 3).toLowerCase() === monthShort.toLowerCase()
-  );
-
-  if (monthIndex < 0) {
-    return null;
-  }
-
-  return `${year}-${String(monthIndex + 1).padStart(2, '0')}-${day}`;
+function validate(f: Form): Partial<Record<keyof Form, string>> {
+  const e: Partial<Record<keyof Form, string>> = {};
+  if (!f.full_name.trim()) e.full_name = 'Enter your full name.';
+  if (!f.email.trim()) e.email = 'Enter your email.';
+  else if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) e.email = 'Enter a valid email.';
+  if (!f.phone_number.trim()) e.phone_number = 'Enter your phone number.';
+  if (!f.license_number.trim()) e.license_number = 'Enter your licence number.';
+  if (!f.facility_id) e.facility_id = 'Choose your facility.';
+  if (f.password.length < 8) e.password = 'Use at least 8 characters.';
+  if (f.password2 !== f.password) e.password2 = 'Passwords do not match.';
+  return e;
 }
 
-type DOBStep = 'day' | 'month' | 'year';
-
-//Date Picker Modal 
-function DatePickerModal({
-  visible,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  onSelect: (dob: string) => void;
-  onClose: () => void;
-}) {
-  const [step, setStep] = React.useState<DOBStep>('day');
-  const [day, setDay] = React.useState('');
-  const [month, setMonth] = React.useState('');
-
-  const isDay = step === 'day';
-  const isMonth = step === 'month';
-  const options = isDay ? DAYS : isMonth ? MONTHS : YEARS;
-  const title = isDay ? 'Select Day' : isMonth ? 'Select Month' : 'Select Year';
-  const currentSelected = isDay ? day : isMonth ? month : '';
-  const progress = isDay ? 1 : isMonth ? 2 : 3;
-
-  const handlePick = (val: string) => {
-    if (isDay) { setDay(val); setStep('month'); }
-    else if (isMonth) { setMonth(val); setStep('year'); }
-    else {
-      onSelect(`${day} ${month.slice(0, 3)} ${val}`);
-      handleClose();
-    }
-  };
-
-  const handleBack = () => {
-    if (step === 'month') setStep('day');
-    else if (step === 'year') setStep('month');
-  };
-
-  const handleClose = () => {
-    setStep('day'); setDay(''); setMonth('');
-    onClose();
-  };
-
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={pickerStyles.overlay} onPress={handleClose} />
-      <View style={pickerStyles.sheet}>
-        <View style={pickerStyles.handle} />
-
-        {/* Step dots */}
-        <View style={dobStyles.stepRow}>
-          {[1, 2, 3].map((s) => (
-            <View key={s} style={[dobStyles.stepDot, s <= progress && dobStyles.stepDotActive]} />
-          ))}
-        </View>
-
-        {/* Title row with optional back */}
-        <View style={dobStyles.headerRow}>
-          {!isDay && (
-            <TouchableOpacity onPress={handleBack} style={dobStyles.backBtn} activeOpacity={0.7}>
-              <Ionicons name="chevron-back" size={20} color={PRIMARY} />
-            </TouchableOpacity>
-          )}
-          <Text style={pickerStyles.title}>{title}</Text>
-        </View>
-
-        {/* Running preview */}
-        {(day || month) && (
-          <View style={dobStyles.preview}>
-            <Text style={dobStyles.previewText}>
-              {day}{month ? ` · ${month.slice(0, 3)}` : ''}
-            </Text>
-          </View>
-        )}
-
-        <FlatList
-          data={options}
-          keyExtractor={(item) => item}
-          style={{ maxHeight: 300 }}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => (
-            <TouchableOpacity
-              style={pickerStyles.option}
-              onPress={() => handlePick(item)}
-              activeOpacity={0.7}
-            >
-              <Text style={[pickerStyles.optionText, currentSelected === item && pickerStyles.optionActive]}>
-                {item}
-              </Text>
-              {currentSelected === item && (
-                <Ionicons name="checkmark-circle" size={20} color={PRIMARY} />
-              )}
-            </TouchableOpacity>
-          )}
-        />
-      </View>
-    </Modal>
-  );
-}
-
-// Picker Modal 
-function PickerModal({
-  visible,
-  title,
-  options,
-  selected,
-  onSelect,
-  onClose,
-}: {
-  visible: boolean;
-  title: string;
-  options: string[];
-  selected: string;
-  onSelect: (val: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide">
-      <Pressable style={pickerStyles.overlay} onPress={onClose} />
-      <View style={pickerStyles.sheet}>
-        <View style={pickerStyles.handle} />
-        <Text style={pickerStyles.title}>{title}</Text>
-        {options.map((opt) => (
-          <TouchableOpacity
-            key={opt}
-            style={pickerStyles.option}
-            onPress={() => { onSelect(opt); onClose(); }}
-            activeOpacity={0.7}
-          >
-            <Text style={[pickerStyles.optionText, selected === opt && pickerStyles.optionActive]}>
-              {opt}
-            </Text>
-            {selected === opt && (
-              <Ionicons name="checkmark-circle" size={20} color={PRIMARY} />
-            )}
-          </TouchableOpacity>
-        ))}
-      </View>
-    </Modal>
-  );
-}
-
-//Section Header 
-function SectionHeader({ icon, label }: { icon: React.ComponentProps<typeof Ionicons>['name']; label: string }) {
-  return (
-    <View style={sectionStyles.row}>
-      <View style={sectionStyles.iconBox}>
-        <Ionicons name={icon} size={14} color={PRIMARY} />
-      </View>
-      <Text style={sectionStyles.label}>{label}</Text>
-      <View style={sectionStyles.line} />
-    </View>
-  );
-}
-
-// Main Screen 
 export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
+  const facilities = useFacilities();
+  const signUp = useSignUp();
+  const [form, setForm] = useState<Form>(EMPTY);
+  const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const [fullName, setFullName] = useState('');
-  const [dateOfBirth, setDateOfBirth] = useState('');
-  const [gender, setGender] = useState('');
-  const [genotype, setGenotype] = useState('');
-  const [email, setEmail] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [activePicker, setActivePicker] = useState<'gender' | 'genotype' | 'dob' | null>(null);
-  const [localError, setLocalError] = useState<string | null>(null);
-  const registerMutation = useRegister();
+  const set = (k: keyof Form) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  const apiErrorMessage =
-    registerMutation.error instanceof Error ? registerMutation.error.message : null;
-
-  const handleRegister = async () => {
-    const normalizedDateOfBirth = formatDateForApi(dateOfBirth);
-
-    if (
-      !fullName.trim() ||
-      !normalizedDateOfBirth ||
-      !gender ||
-      !genotype ||
-      !email.trim() ||
-      !phoneNumber.trim() ||
-      !password ||
-      !confirmPassword
-    ) {
-      setLocalError('Please fill all fields before continuing.');
-      return;
+  const submit = async () => {
+    const e = validate(form);
+    setErrors(e);
+    setFormError(null);
+    if (Object.keys(e).length) return;
+    try {
+      await signUp.mutateAsync({
+        ...form,
+        full_name: form.full_name.trim(),
+        email: form.email.trim(),
+        phone_number: form.phone_number.trim(),
+        license_number: form.license_number.trim(),
+      });
+      router.replace('/(auth)/awaiting-approval');
+    } catch (err) {
+      const fe = fieldErrors(err);
+      setErrors({ ...fe, facility_id: fe.facility_id ?? fe.facility });
+      setFormError(errorMessage(err));
     }
-
-    if (password !== confirmPassword) {
-      setLocalError('Passwords do not match.');
-      return;
-    }
-
-    setLocalError(null);
-    await registerMutation.mutateAsync({
-      date_of_birth: normalizedDateOfBirth,
-      email: email.trim(),
-      full_name: fullName.trim(),
-      gender: GENDER_API_MAP[gender] ?? gender.toLowerCase(),
-      genotype: genotype.trim(),
-      password,
-      password2: confirmPassword,
-      phone_number: phoneNumber.trim(),
-    });
-
-    router.replace('/(auth)/signup-success');
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar style="dark" />
+    <Screen contentStyle={{ paddingTop: insets.top + 16 }}>
+      <Pressable onPress={() => router.back()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Back" style={st.back}>
+        <Ionicons name="chevron-back" size={24} color={C.text} />
+      </Pressable>
+      <View style={{ gap: 6 }}>
+        <Text style={ui.h1} accessibilityRole="header">Request an account</Text>
+        <Text style={ui.muted}>
+          An administrator approves every account after checking your licence with the Medical and Dental Council.
+        </Text>
+      </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <ScrollView
-          contentContainerStyle={[styles.inner, { paddingBottom: insets.bottom + 40 }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          {/* Back */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.canGoBack() ? router.back() : router.replace('/onboarding')} activeOpacity={0.7}>
-            <Ionicons name="chevron-back" size={22} color="#0f172a" />
-          </TouchableOpacity>
+      {formError ? <Banner tone="danger" text={formError} /> : null}
 
-          {/* Header */}
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Your clinical profile helps personalise your predictions</Text>
+      <TextField label="Full name" value={form.full_name} onChangeText={set('full_name')} error={errors.full_name}
+        autoComplete="name" textContentType="name" />
+      <TextField label="Email" value={form.email} onChangeText={set('email')} error={errors.email}
+        autoCapitalize="none" autoComplete="email" keyboardType="email-address" textContentType="emailAddress" />
+      <TextField label="Phone number" value={form.phone_number} onChangeText={set('phone_number')} error={errors.phone_number}
+        keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" />
+      <TextField label="Licence number" value={form.license_number} onChangeText={set('license_number')} error={errors.license_number}
+        autoCapitalize="characters" hint="Medical and Dental Council registration number" />
 
-          {/* ── Personal Information  */}
-          <SectionHeader icon="person-outline" label="Personal Information" />
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your full name"
-              placeholderTextColor="#94a3b8"
-              value={fullName}
-              onChangeText={setFullName}
-              autoCapitalize="words"
-              autoCorrect={false}
-            />
+      <View style={{ gap: 6 }}>
+        <Text style={st.label}>Facility</Text>
+        {facilities.isLoading ? <Loading /> : facilities.isError ? (
+          <ErrorState message={errorMessage(facilities.error)} onRetry={() => facilities.refetch()} />
+        ) : !facilities.data?.length ? (
+          <Text style={ui.muted}>No facilities available yet. Contact your administrator.</Text>
+        ) : (
+          // ponytail: chip list is fine for a handful of facilities; switch to a searchable modal if the list grows.
+          <View style={ui.wrap}>
+            {facilities.data.map((f) => (
+              <Chip key={f.id} label={f.name} selected={form.facility_id === f.id} onPress={() => set('facility_id')(f.id)} />
+            ))}
           </View>
+        )}
+        {errors.facility_id ? <Text style={st.error}>{errors.facility_id}</Text> : null}
+      </View>
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Date of Birth</Text>
-            <TouchableOpacity
-              style={styles.pickerTrigger}
-              onPress={() => setActivePicker('dob')}
-              activeOpacity={0.8}
-            >
-              <Text style={dateOfBirth ? styles.pickerValue : styles.pickerPlaceholder}>
-                {dateOfBirth || 'DD · MMM · YYYY'}
-              </Text>
-              <Ionicons name="calendar-outline" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-          </View>
+      <TextField label="Password" value={form.password} onChangeText={set('password')} error={errors.password}
+        secureTextEntry autoComplete="new-password" textContentType="newPassword" hint="At least 8 characters" />
+      <TextField label="Confirm password" value={form.password2} onChangeText={set('password2')} error={errors.password2}
+        secureTextEntry autoComplete="new-password" textContentType="newPassword" />
 
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Gender</Text>
-            <TouchableOpacity
-              style={styles.pickerTrigger}
-              onPress={() => setActivePicker('gender')}
-              activeOpacity={0.8}
-            >
-              <Text style={gender ? styles.pickerValue : styles.pickerPlaceholder}>
-                {gender || 'Select gender'}
-              </Text>
-              <Ionicons name="chevron-down" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-          </View>
-
-          {/* ── Medical Information */}
-          <SectionHeader icon="medkit-outline" label="Medical Information" />
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>SCD Genotype</Text>
-            <TouchableOpacity
-              style={styles.pickerTrigger}
-              onPress={() => setActivePicker('genotype')}
-              activeOpacity={0.8}
-            >
-              <Text style={genotype ? styles.pickerValue : styles.pickerPlaceholder}>
-                {genotype || 'Select genotype'}
-              </Text>
-              <Ionicons name="chevron-down" size={18} color="#94a3b8" />
-            </TouchableOpacity>
-            <View style={styles.infoBox}>
-              <Ionicons name="information-circle-outline" size={15} color={PRIMARY} />
-              <Text style={styles.infoText}>
-                Your genotype helps us personalise care guidance for your specific condition.
-              </Text>
-            </View>
-          </View>
-
-          {/* ── Contact & Login   */}
-          <SectionHeader icon="call-outline" label="Contact & Login" />
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Email Address</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your email"
-              placeholderTextColor="#94a3b8"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your phone number"
-              placeholderTextColor="#94a3b8"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Password</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={[styles.input, styles.inputWithIcon]}
-                placeholder="Create password"
-                placeholderTextColor="#94a3b8"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowPassword(v => !v)} activeOpacity={0.7}>
-                <Ionicons name={showPassword ? 'eye-outline' : 'eye-off-outline'} size={20} color="#94a3b8" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <Text style={styles.label}>Confirm Password</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                style={[styles.input, styles.inputWithIcon]}
-                placeholder="Confirm your password"
-                placeholderTextColor="#94a3b8"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry={!showConfirm}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity style={styles.eyeBtn} onPress={() => setShowConfirm(v => !v)} activeOpacity={0.7}>
-                <Ionicons name={showConfirm ? 'eye-outline' : 'eye-off-outline'} size={20} color="#94a3b8" />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* CTA */}
-          <TouchableOpacity
-            style={styles.primaryBtn}
-            activeOpacity={0.85}
-            onPress={handleRegister}
-            disabled={registerMutation.isPending}
-          >
-            <LinearGradient
-              colors={[PRIMARY, PRIMARY_DARK]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.gradient, registerMutation.isPending && styles.gradientDisabled]}
-            >
-              <View style={styles.primaryBtnContent}>
-                {registerMutation.isPending ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : null}
-                <Text
-                  style={[
-                    styles.primaryBtnText,
-                    registerMutation.isPending && styles.primaryBtnTextWithSpinner,
-                  ]}
-                >
-                  {registerMutation.isPending ? 'Creating account...' : 'Create Account'}
-                </Text>
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-
-          {(localError || apiErrorMessage) && (
-            <Text style={styles.errorText}>{localError ?? apiErrorMessage}</Text>
-          )}
-
-          {/* Footer */}
-          <TouchableOpacity
-            style={styles.footerRow}
-            activeOpacity={0.7}
-            onPress={() => router.replace('/(auth)/login')}
-          >
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <Text style={[styles.footerText, styles.footerLink]}>Log in</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      {/* Date Picker */}
-      <DatePickerModal
-        visible={activePicker === 'dob'}
-        onSelect={(dob) => { setDateOfBirth(dob); setActivePicker(null); }}
-        onClose={() => setActivePicker(null)}
-      />
-
-      {/* Pickers */}
-      <PickerModal
-        visible={activePicker === 'gender'}
-        title="Select Gender"
-        options={GENDER_OPTIONS}
-        selected={gender}
-        onSelect={setGender}
-        onClose={() => setActivePicker(null)}
-      />
-      <PickerModal
-        visible={activePicker === 'genotype'}
-        title="Select SCD Genotype"
-        options={GENOTYPE_OPTIONS}
-        selected={genotype}
-        onSelect={setGenotype}
-        onClose={() => setActivePicker(null)}
-      />
-    </View>
+      <Button title="Submit request" onPress={submit} loading={signUp.isPending} />
+      <Button title="I already have an account" variant="ghost" onPress={() => router.replace('/(auth)/login')} />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: BG,
-  },
-  inner: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-  },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 28,
-  },
-  title: {
-    fontSize: 30,
-    fontFamily: Fonts.headingBold,
-    color: '#0f172a',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 15,
-    fontFamily: Fonts.body,
-    color: '#64748b',
-    marginBottom: 28,
-  },
-  fieldGroup: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 13,
-    fontFamily: Fonts.bodySemiBold,
-    color: '#0f172a',
-    marginBottom: 8,
-  },
-  input: {
-    width: '100%',
-    height: 54,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    fontFamily: Fonts.body,
-    color: '#0f172a',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  inputRow: {
-    position: 'relative',
-  },
-  inputWithIcon: {
-    paddingRight: 52,
-  },
-  eyeBtn: {
-    position: 'absolute',
-    right: 16,
-    top: 0,
-    bottom: 0,
-    justifyContent: 'center',
-  },
-  pickerTrigger: {
-    width: '100%',
-    height: 54,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...Platform.select({
-      ios: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 6,
-      },
-      android: { elevation: 2 },
-    }),
-  },
-  pickerValue: {
-    fontSize: 15,
-    fontFamily: Fonts.body,
-    color: '#0f172a',
-  },
-  pickerPlaceholder: {
-    fontSize: 15,
-    fontFamily: Fonts.body,
-    color: '#94a3b8',
-  },
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 8,
-    backgroundColor: `${PRIMARY}12`,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 12,
-    fontFamily: Fonts.body,
-    color: '#334155',
-    lineHeight: 18,
-  },
-  primaryBtn: {
-    height: 58,
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginTop: 8,
-    marginBottom: 20,
-    ...Platform.select({
-      ios: {
-        shadowColor: PRIMARY,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.3,
-        shadowRadius: 14,
-      },
-      android: { elevation: 6 },
-    }),
-  },
-  gradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  gradientDisabled: {
-    opacity: 0.85,
-  },
-  primaryBtnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  primaryBtnText: {
-    fontSize: 16,
-    fontFamily: Fonts.bodyBold,
-    color: '#fff',
-    letterSpacing: 0.3,
-  },
-  primaryBtnTextWithSpinner: {
-    marginLeft: 8,
-  },
-  errorText: {
-    fontSize: 13,
-    fontFamily: Fonts.body,
-    color: '#dc2626',
-    marginTop: -6,
-    marginBottom: 14,
-    textAlign: 'center',
-  },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  footerText: {
-    fontSize: 14,
-    fontFamily: Fonts.body,
-    color: '#64748b',
-  },
-  footerLink: {
-    fontFamily: Fonts.bodyBold,
-    color: PRIMARY,
-  },
-});
-
-const sectionStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    marginBottom: 20,
-  },
-  iconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    backgroundColor: `${PRIMARY}18`,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  label: {
-    fontSize: 12,
-    fontFamily: Fonts.bodyBold,
-    color: PRIMARY_DARK,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-  },
-  line: {
-    flex: 1,
-    height: 1,
-    backgroundColor: `${PRIMARY}25`,
-  },
-});
-
-const dobStyles = StyleSheet.create({
-  stepRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 16,
-  },
-  stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#e2e8f0',
-  },
-  stepDotActive: {
-    width: 24,
-    backgroundColor: PRIMARY,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 12,
-  },
-  backBtn: {
-    padding: 4,
-  },
-  preview: {
-    backgroundColor: `${PRIMARY}15`,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 12,
-  },
-  previewText: {
-    fontSize: 13,
-    fontFamily: Fonts.bodySemiBold,
-    color: PRIMARY_DARK,
-  },
-});
-
-const pickerStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  sheet: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 36,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#e2e8f0',
-    alignSelf: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 16,
-    fontFamily: Fonts.headingSemiBold,
-    color: '#0f172a',
-    marginBottom: 16,
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-  },
-  optionText: {
-    fontSize: 15,
-    fontFamily: Fonts.body,
-    color: '#334155',
-  },
-  optionActive: {
-    fontFamily: Fonts.bodyBold,
-    color: PRIMARY,
-  },
+const st = StyleSheet.create({
+  back: { width: 44, height: 44, justifyContent: 'center', marginLeft: -8 },
+  label: { fontFamily: Fonts.bodySemiBold, fontSize: 13, color: C.text },
+  error: { fontFamily: Fonts.bodySemiBold, fontSize: 12, color: C.danger },
 });
