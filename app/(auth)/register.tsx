@@ -1,12 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Banner, Button, ErrorState, Loading, Screen, SelectField, TextField, ui } from '@/components/ui';
 import { C, Fonts } from '@/constants/theme';
-import { useFacilities, useSignUp } from '@/hooks/api';
+import { useFacilities, useLogin, useSignUp } from '@/hooks/api';
 import { errorMessage, fieldErrors } from '@/lib/api/api-error';
 import type { SignUpPayload } from '@/lib/api/types';
 
@@ -32,6 +32,7 @@ export default function RegisterScreen() {
   const insets = useSafeAreaInsets();
   const facilities = useFacilities();
   const signUp = useSignUp();
+  const login = useLogin();
   const [form, setForm] = useState<Form>(EMPTY);
   const [errors, setErrors] = useState<Partial<Record<keyof Form, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -51,11 +52,19 @@ export default function RegisterScreen() {
         phone_number: form.phone_number.trim(),
         license_number: form.license_number.trim(),
       });
-      router.replace('/(auth)/awaiting-approval');
     } catch (err) {
       const fe = fieldErrors(err);
       setErrors({ ...fe, facility_id: fe.facility_id ?? fe.facility });
       setFormError(errorMessage(err));
+      return;
+    }
+    // No approval step: sign straight in. The account already exists, so if this fails send them to sign-in.
+    try {
+      await login.mutateAsync({ email: form.email.trim(), password: form.password });
+      router.replace('/(tabs)');
+    } catch {
+      Alert.alert('Account created', 'Your account is ready. Please sign in.');
+      router.replace('/(auth)/login');
     }
   };
 
@@ -65,9 +74,9 @@ export default function RegisterScreen() {
         <Ionicons name="chevron-back" size={24} color={C.text} />
       </Pressable>
       <View style={{ gap: 6 }}>
-        <Text style={ui.h1} accessibilityRole="header">Request an account</Text>
+        <Text style={ui.h1} accessibilityRole="header">Create an account</Text>
         <Text style={ui.muted}>
-          An administrator approves every account after checking your licence with the Medical and Dental Council.
+          For doctors at a registered facility. Your licence number is recorded with your account.
         </Text>
       </View>
 
@@ -106,7 +115,7 @@ export default function RegisterScreen() {
       <TextField label="Confirm password" value={form.password2} onChangeText={set('password2')} error={errors.password2}
         secureTextEntry autoComplete="new-password" textContentType="newPassword" />
 
-      <Button title="Submit request" onPress={submit} loading={signUp.isPending} />
+      <Button title="Create account" onPress={submit} loading={signUp.isPending || login.isPending} />
       <Button title="I already have an account" variant="ghost" onPress={() => router.replace('/(auth)/login')} />
     </Screen>
   );

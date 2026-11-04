@@ -8,7 +8,7 @@ import { useLogout, useMe, useUpdateMe } from '@/hooks/api';
 import { errorMessage, fieldErrors } from '@/lib/api/api-error';
 import { clearAllDrafts, hasAnyDrafts } from '@/lib/drafts';
 
-const STATUS_LABEL = { pending: 'Pending approval', active: 'Active', deactivated: 'Deactivated' } as const;
+const STATUS_LABEL = { active: 'Active', deactivated: 'Deactivated' } as const;
 
 export default function AccountScreen() {
   const me = useMe();

@@ -21,11 +21,11 @@ Patients never use the app.
 | Role | Who | Can do |
 |---|---|---|
 | **Clinician** | Doctor managing SCD patients | All patient actions within their facility |
-| **Facility admin** | Clinic lead / IT | Approve or deactivate clinicians, reassign patients, view the audit log. Uses **Django admin** for MVP (no in-app admin UI). |
+| **Facility admin** | Clinic lead / IT | Deactivate clinicians, reassign patients, view the audit log. Uses **Django admin** for MVP (no in-app admin UI). |
 
 Defaults (confirm in §12):
-- Patients belong to a **facility**, and all approved clinicians there can see them. Each patient has a **primary clinician**.
-- Clinician accounts need admin approval. The admin checks the licence number manually against the Medical and Dental Council register.
+- Patients belong to a **facility**, and all clinicians registered there can see them. Each patient has a **primary clinician**.
+- **No approval step (decided):** a doctor creates an account and has access straight away. The licence number is recorded so accounts can be audited, and an admin can deactivate any account. Risk accepted: anyone who signs up and picks a facility can read that facility's patients.
 - Patients are looked up by **hospital folder number** or name.
 
 ## 3. Model facts the app must respect
@@ -57,7 +57,7 @@ The current backend treats the logged-in user as the patient (`HUBaseline` is On
 | Entity | Key fields |
 |---|---|
 | **Facility** | name, region |
-| **Clinician** (auth user) | name, email, phone, licence no., facility, status (pending / active / deactivated), MFA |
+| **Clinician** (auth user) | name, email, phone, licence no., facility, status (active / deactivated), MFA |
 | **Patient** | facility, folder no. (unique per facility), full name, DOB, sex (male/female, biological), genotype, phone, next of kin, primary clinician, data-processing consent (date, recorded by), research-prediction consent (yes/no, date, recorded by), ANC flag floor (default 2.0, reason if changed), archived |
 | **HUTreatment** | patient, baseline Hb, baseline source (steady-state pre-HU / from folder / unknown), HU start date, **versioned via `django-simple-history`**: every edit keeps the old version |
 | **HUInterruption** | patient, stop date, restart date, reason |
@@ -155,10 +155,10 @@ The **patient profile** is the hub, with these sections:
 Format: *As a clinician, I want … so that …*, followed by acceptance criteria (AC).
 
 ### E1. Account and access
-- **US1.1 Request an account.** I enter name, email, phone, licence no. and facility.
-  AC: the account is pending until an admin approves it in Django admin; I see an "Awaiting approval" screen.
+- **US1.1 Create an account.** I enter name, email, phone, licence no. and facility.
+  AC: the account is active immediately and I am signed straight in to the Today tab.
 - **US1.2 Sign in** with email and password, plus a one-time code (MFA).
-  AC: inline errors; pending and deactivated accounts get clear messages.
+  AC: inline errors; deactivated accounts get a clear message.
 - **US1.3 Forgot password**, reset by email.
 - **US1.4 Idle lock.** After 5 minutes of inactivity, even with the app open, I re-enter my PIN or use biometrics.
   AC: built for shared clinic phones.
@@ -245,7 +245,7 @@ Format: *As a clinician, I want … so that …*, followed by acceptance criteri
 ## 10. Key user flows
 
 **F1. First use**
-Request account → "Awaiting approval" → admin approves → sign in with MFA → set PIN/biometrics → Today. The empty state says "Add your first patient".
+Create account → signed in straight away → set PIN/biometrics → Today. The empty state says "Add your first patient".
 
 **F2. New patient starting HU**
 Patients → Add → demographics and consent → Save. If a possible duplicate is found, I choose "open existing" or "continue". The profile then prompts "Set baseline" (steady-state Hb, source, start date) and shows "Day 0 · prediction available from `date`".
@@ -307,7 +307,7 @@ Today → Overdue (past the scheduled next visit) → patient → call, using th
 5. Data Protection Act 2012 (Act 843) registration with the Data Protection Commission. Does Ghana FDA treat this as software as a medical device? **Legal.**
 6. Hospital folder number format, for validation.
 7. ~~Migrate or reset?~~ Decided: reset, after taking a dump.
-8. ~~MFA in MVP?~~ Decided: v1.1. MVP relies on admin approval, idle lock and immediate server-side deactivation.
+8. ~~MFA in MVP?~~ Decided: v1.1. MVP relies on the idle lock and immediate server-side deactivation.
 
 ## Appendix: privacy and security requirements
 
@@ -315,4 +315,4 @@ Today → Overdue (past the scheduled next visit) → patient → call, using th
 - **Transport and storage:** TLS only. Tokens in SecureStore. Drafts encrypted and cleared at sign-out.
 - **Leak paths:** no patient data in logs, crash reports or push notifications. FLAG_SECURE on patient screens.
 - **Exports:** confirmed, watermarked and logged.
-- **Account checks:** licence numbers verified manually at approval. Deactivation takes effect immediately on the server.
+- **Account checks:** licence numbers recorded at sign-up for later audit (no approval step). Deactivation takes effect immediately on the server.

@@ -28,10 +28,6 @@ export default function LoginScreen() {
       await login.mutateAsync({ email: email.trim(), password });
       router.replace('/(tabs)');
     } catch (err) {
-      if (isApiCode(err, 'account_pending')) {
-        router.replace('/(auth)/awaiting-approval');
-        return;
-      }
       setError(isApiCode(err, 'account_deactivated')
         ? 'This account has been deactivated. Contact your facility administrator.'
         : errorMessage(err));
@@ -79,7 +75,7 @@ export default function LoginScreen() {
       </Pressable>
 
       <Button title="Sign in" onPress={submit} loading={login.isPending} />
-      <Button title="Request an account" variant="ghost" onPress={() => router.push('/(auth)/register')} />
+      <Button title="Create an account" variant="ghost" onPress={() => router.push('/(auth)/register')} />
     </Screen>
   );
 }

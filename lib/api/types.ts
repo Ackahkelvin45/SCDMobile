@@ -3,7 +3,7 @@
 export type Paginated<T> = { count: number; next: string | null; previous: string | null; results: T[] };
 
 // ─── Auth / config ───────────────────────────────────────────────────────────
-export type ClinicianStatus = 'pending' | 'active' | 'deactivated';
+export type ClinicianStatus = 'active' | 'deactivated';
 
 export type Facility = { id: string; name: string; region?: string; prediction_enabled?: boolean };
 

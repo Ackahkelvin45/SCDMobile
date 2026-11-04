@@ -46,8 +46,8 @@ This is for the backend developer. It lists the endpoints the mobile app needs f
 
 | | Method & path | Purpose |
 |---|---|---|
-| 🟡 | `POST /auth/users/` | **Clinician sign-up request.** Body: `full_name, email, phone_number, license_number, facility_id, password, password2`. Creates the account with `status=pending`. No patient fields. |
-| 🟡 | `POST /auth/login/` | Returns **403** with `code: "account_pending"` or `"account_deactivated"` when the account isn't active. Response includes `user` (the `/me` shape). |
+| 🟡 | `POST /auth/users/` | **Clinician sign-up.** Body: `full_name, email, phone_number, license_number, facility_id, password, password2`. Creates the account with `status=active`; there is no approval step, and the app signs in straight after with `POST /auth/login/`. No patient fields. |
+| 🟡 | `POST /auth/login/` | Returns **403** with `code: "account_deactivated"` for a deactivated account. Response includes `user` (the `/me` shape). |
 | 🟢 | `POST /auth/refresh/` | Unchanged. |
 | 🟢 | `POST /auth/logout/` | Unchanged. |
 | 🟡 | `GET /auth/users/me/` | `id, full_name, email, phone_number, license_number, status, facility {id, name, prediction_enabled}` |
@@ -58,7 +58,7 @@ This is for the backend developer. It lists the endpoints the mobile app needs f
 | 🔵 | `GET /facilities/` | **Public** list `{id, name, region}` for the sign-up picker. |
 | 🔵 | `GET /clinicians/` | Active clinicians in my facility, `{id, full_name}`. |
 
-Approval, deactivation, licence checks and patient reassignment happen in **Django admin**.
+Deactivation, licence audit and patient reassignment happen in **Django admin**. There is no approval step.
 
 ---
 
@@ -273,7 +273,7 @@ The response also carries a `reliability_note`:
 
 - `Facility.prediction_enabled` (default **false**), toggled in Django admin.
 - Django admin needs:
-  - clinician approve, deactivate and licence fields;
+  - clinician deactivate and licence fields;
   - patient reassignment;
   - a CSV export of predictions and outcomes for the research team (with an explicit log row for each export).
 
